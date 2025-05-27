@@ -10,7 +10,7 @@ const lambda = new LambdaClient({ region: "us-east-1" });
 const s3 = new S3Client({ region: "us-east-1" });
 const bucketName = process.env.BUCKET_NAME;
 
-const LogTickerList = ['AMZN', 'SPY', 'QQQ', 'IWM', 'AAPL'];
+const LogTickerList = ['AMZN','SPY', 'QQQ', 'IWM','AAPL', 'NVDA', 'GOOG', 'TSLA','SOXL', 'SOFI', 'BABA', 'AAL','INTC'];
 const ETF_List = ['SPY', 'QQQ', 'IWM', 'TQQQ', 'SOXL', 'TSLL', 'SQQQQ'];
 
 
