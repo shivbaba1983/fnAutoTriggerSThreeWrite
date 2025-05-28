@@ -10,8 +10,8 @@ const lambda = new LambdaClient({ region: "us-east-1" });
 const s3 = new S3Client({ region: "us-east-1" });
 const bucketName = process.env.BUCKET_NAME;
 
-const LogTickerList = ['AMZN','SPY', 'QQQ', 'IWM','AAPL', 'NVDA', 'GOOG', 'TSLA','SOXL', 'SOFI', 'BABA', 'AAL','INTC'];
-const ETF_List = ['SPY', 'QQQ', 'IWM', 'TQQQ', 'SOXL', 'TSLL', 'SQQQQ'];
+const LogTickerList = ['AMZN','SPY', 'QQQ', 'IWM','AAPL', 'NVDA', 'GOOG', 'TSLA','SOXL', 'SOFI', 'AAL','INTC', 'TSLL','AAPU'];
+const ETF_List = ['SPY', 'QQQ', 'IWM', 'TQQQ', 'SOXL', 'TSLL', 'SQQQQ','AAPU'];
 
 
 export const handler = async (event) => {
@@ -198,7 +198,7 @@ const appendToS3JsonArray = async (newObject) => {
       ContentType: "application/json",
     });
     console.log(`putCommand command--: ${JSON.stringify(putCommand)}`);
-    await s3.send(putCommand);
+   const resp= await s3.send(putCommand);
 
     // const payload = {
     //   Bucket: bucketName,
@@ -226,7 +226,7 @@ const appendToS3JsonArray = async (newObject) => {
 
     //  console.log(`response of sThreeWrite--: ${JSON.stringify(updatedresponse)}`);
     console.log(`✅ Appended and uploaded JSON file to S3: ${FILE_KEY}`);
-    return updatedresponse;
+    return resp;
   } catch (error) {
     console.log('error in appendToS3JsonArray', error)
   }
