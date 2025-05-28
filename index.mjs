@@ -90,7 +90,7 @@ const startWritingProcess = async (selectedTicker) => {
     // console.log('Parsed table rows:', rows);
 
     const total = await caculateSum(rows);
-    console.log(' caculateSum ..call volume is---.', total.c_Volume);
+    //console.log(' caculateSum ..call volume is---.', total.c_Volume);
 
     const idTemp = Date.now().toString(36) + Math.random().toString(36).substring(2);
     const newEntry = {
@@ -197,7 +197,6 @@ const appendToS3JsonArray = async (newObject) => {
       Body: JSON.stringify(dataArray, null, 2),
       ContentType: "application/json",
     });
-    console.log(`putCommand command--: ${JSON.stringify(putCommand)}`);
    const resp= await s3.send(putCommand);
 
     // const payload = {
