@@ -10,16 +10,18 @@ const lambda = new LambdaClient({ region: "us-east-1" });
 const s3 = new S3Client({ region: "us-east-1" });
 const bucketName = process.env.BUCKET_NAME;
 
-const LogTickerList = ['SPY', 'QQQ', 'IWM','AAPL', 'NVDA','AMZN', 'GOOG', 'TSLA','META','MSFT','SOXL'];
-const ETF_List = ['SPY', 'QQQ', 'IWM', 'TQQQ', 'SOXL', 'TSLL', 'SQQQQ','AAPU'];
+const LogTickerList = ['SPY', 'QQQ', 'IWM', 'AAPL', 'NVDA', 'AMZN', 'GOOG', 'TSLA', 'META', 'MSFT', 'SOXL'];
+const ETF_List = ['SPY', 'QQQ', 'IWM', 'TQQQ', 'SOXL', 'TSLL', 'SQQQQ', 'AAPU'];
 
 
 export const handler = async (event) => {
 
   let results = [];
+  const FILE_KEY = `${getTodayInEST(true)}.json`;
+  const isFileExists = await checkIfFileExists(FILE_KEY);
   for (const ticker of LogTickerList) {
     console.log('inside handler now processing ticker-', ticker);
-    await startWritingProcess(ticker);
+    await startWritingProcess(ticker, isFileExists,FILE_KEY);
   }
 
   return {
@@ -32,7 +34,7 @@ export const handler = async (event) => {
   };
 };
 
-const startWritingProcess = async (selectedTicker) => {
+const startWritingProcess = async (selectedTicker, isFileExists, FILE_KEY) => {
   try {
     let selectedDate = '';
     let selectedDayOrMonth = 'day';
@@ -89,6 +91,14 @@ const startWritingProcess = async (selectedTicker) => {
     // const rows = latestData?.data?.table?.rows || [];
     // console.log('Parsed table rows:', rows);
 
+    // const FILE_KEY = `${getTodayInEST(true)}.json`;
+    // const exists = await checkIfFileExists(FILE_KEY);
+    if (!isFileExists) {//If creating today's date log file then update open interst first time each day
+      await createJsonFile(FILE_KEY, []);
+      await processOpenInterstFirstTimeEachDay(rows, selectedTicker, lstPrice);//updating openInterst in OpenInterest.json file
+      console.log('File created successfully');
+    }
+
     const total = await caculateSum(rows);
     //console.log(' caculateSum ..call volume is---.', total.c_Volume);
 
@@ -101,7 +111,9 @@ const startWritingProcess = async (selectedTicker) => {
       selectedTicker: selectedTicker,
       lstPrice: lstPrice
     };
-    await appendToS3JsonArray(newEntry);
+
+
+    await appendToS3JsonArray(newEntry, FILE_KEY);
     return { ticker: selectedTicker, status: 'success' };
 
   } catch (err) {
@@ -123,6 +135,21 @@ async function caculateSum(rows) {
   }
 
   return { c_Volume, p_Volume };
+}
+async function caculateSumOpenInterest(rows) {
+  let c_OpenInterest = 0;
+  let p_OpenInterest = 0;
+
+  for (const row of rows) {
+    const cRawOI = row.c_OpenInterest;
+    const pRawOI = row.p_OpenInterest;
+    const cOI = parseInt(cRawOI?.replace(/,/g, '')) || 0;
+    const pOI = parseInt(pRawOI?.replace(/,/g, '')) || 0;
+    c_OpenInterest += cOI;
+    p_OpenInterest += pOI;
+  }
+
+  return { c_OpenInterest, p_OpenInterest };
 }
 
 
@@ -168,14 +195,14 @@ const createJsonFile = async (key, data) => {
   }));
 };
 
-const appendToS3JsonArray = async (newObject) => {
-  const FILE_KEY = `${getTodayInEST(true)}.json`;
+const appendToS3JsonArray = async (newObject, FILE_KEY) => {
+  // const FILE_KEY = `${getTodayInEST(true)}.json`;
   let dataArray = [];
-  const exists = await checkIfFileExists(FILE_KEY);
-  if (!exists) {
-    await createJsonFile(FILE_KEY, []);
-    console.log('File created successfully');
-  }
+  // const exists = await checkIfFileExists(FILE_KEY);
+  // if (!exists) {
+  //   await createJsonFile(FILE_KEY, []);
+  //   console.log('File created successfully');
+  // }
 
   try {
 
@@ -197,37 +224,61 @@ const appendToS3JsonArray = async (newObject) => {
       Body: JSON.stringify(dataArray, null, 2),
       ContentType: "application/json",
     });
-   const resp= await s3.send(putCommand);
-
-    // const payload = {
-    //   Bucket: bucketName,
-    //   Key: FILE_KEY,
-    //   Body: JSON.stringify(dataArray, null, 2),
-    //   ContentType: "application/json",
-    // };
-    // console.log('**** inside trying to send new data to s3 bucket data...');
-    // const command = new InvokeCommand({
-    //   FunctionName: "sThreeWrite", // replace with actual Lambda name or ARN
-    //   Payload: Buffer.from(JSON.stringify({ queryStringParameters: payload })),
-    // });
-
-    //   const command = new InvokeCommand({
-    //     FunctionName: "sThreeWrite",
-    //     Payload: Buffer.from(JSON.stringify({
-    //       callVolume: newObject.callVolume,
-    //       putVolume: newObject.putVolume,
-    //       lstPrice: newObject.lstPrice,
-    //       selectedTicker: newObject.selectedTicker
-    //     })),
-    //   });
-    //   console.log('command to send s3 write', command)
-    //  const updatedresponse= await lambda.send(command);
-
-    //  console.log(`response of sThreeWrite--: ${JSON.stringify(updatedresponse)}`);
+    const resp = await s3.send(putCommand);
     console.log(`✅ Appended and uploaded JSON file to S3: ${FILE_KEY}`);
     return resp;
   } catch (error) {
     console.log('error in appendToS3JsonArray', error)
+  }
+};
+
+const processOpenInterstFirstTimeEachDay = async (rows, selectedTicker, lstPrice) => {
+
+  let dataArray = [];
+  const FILE_KEY = `OpenInterest.json`;
+
+  try {
+    const OpenInterestFileExists = await checkIfFileExists(FILE_KEY);
+    if (!OpenInterestFileExists) {
+      await createJsonFile(FILE_KEY, []);
+      console.log('OpenInterest.json File created successfully');
+    }
+
+    const totalOpenInterest = await caculateSumOpenInterest(rows);
+
+    const idTemp = Date.now().toString(36) + Math.random().toString(36).substring(2);
+    const newObject = {
+      id: idTemp,
+      timestamp: getTodayInEST(false),
+      callOpenInterest: totalOpenInterest.c_OpenInterest,
+      putOpenInterest: totalOpenInterest.p_OpenInterest,
+      selectedTicker: selectedTicker,
+      lstPrice: lstPrice
+    };
+
+    const getCommand = new GetObjectCommand({ Bucket: bucketName, Key: FILE_KEY });
+    const response = await s3.send(getCommand);
+    const bodyString = await streamToString(response.Body);
+    dataArray = JSON.parse(bodyString);
+
+    const newId = (dataArray.at(-1)?.id || 0) + 1;
+    const timestamp = new Date().toISOString();
+
+    const newEntry = { id: newId, timestamp, ...newObject };
+
+    dataArray.push(newEntry);
+
+    const putCommand = new PutObjectCommand({
+      Bucket: bucketName,
+      Key: FILE_KEY,
+      Body: JSON.stringify(dataArray, null, 2),
+      ContentType: "application/json",
+    });
+    const resp = await s3.send(putCommand);
+    console.log(`✅ Appended and uploaded processOpenInterstFirstTimeEachDay JSON file to S3: ${FILE_KEY}`);
+    return resp;
+  } catch (error) {
+    console.log('error in processOpenInterstFirstTimeEachDay', error)
   }
 };
 function getEffectiveDate() {
